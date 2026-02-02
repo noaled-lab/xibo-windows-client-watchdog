@@ -56,34 +56,42 @@ jobs:
     - name: Build Solution
       run: msbuild XiboClientWatchdog.sln /p:Configuration=Release /p:Platform="x86"
 
-    - name: Rename Output to NOAWatchdog
+    - name: Prepare Release Package
       shell: powershell
       run: |
-        $sourcePath = "bin\x86\Release\XiboClientWatchdog.exe"
-        $targetPath = "bin\x86\Release\NOAWatchdog.exe"
+        $version = "$env:VERSION"
+        $releaseDir = "bin\x86\Release"
+        $packageDir = "NOAWatchdog-Package"
 
-        if (Test-Path $sourcePath) {
-          Copy-Item -Path $sourcePath -Destination $targetPath -Force
-          Write-Host "Renamed output to NOAWatchdog.exe"
-        } else {
-          Write-Error "Build output not found: $sourcePath"
-          exit 1
+        # Create package directory
+        New-Item -ItemType Directory -Path $packageDir -Force | Out-Null
+
+        # Copy all necessary files from Release directory
+        Write-Host "Copying files to package directory..."
+        Copy-Item -Path "$releaseDir\*" -Destination $packageDir -Recurse -Force
+
+        # Rename the main executable
+        if (Test-Path "$packageDir\XiboClientWatchdog.exe") {
+          Rename-Item -Path "$packageDir\XiboClientWatchdog.exe" -NewName "NOAWatchdog.exe" -Force
+          Write-Host "Renamed XiboClientWatchdog.exe to NOAWatchdog.exe"
         }
+
+        # List files in package
+        Write-Host "`nFiles in package:"
+        Get-ChildItem -Path $packageDir -Recurse | Select-Object FullName
 
     - name: Create Release Archive
       shell: powershell
       run: |
         $version = "$env:VERSION"
         $archiveName = "NOAWatchdog-v$version.zip"
-        $releaseDir = "bin\x86\Release"
+        $packageDir = "NOAWatchdog-Package"
 
         Write-Host "Creating release archive: $archiveName"
-        Compress-Archive -Path "$releaseDir\*" -DestinationPath $archiveName -Force
+        Compress-Archive -Path "$packageDir\*" -DestinationPath $archiveName -Force
         Write-Host "Archive created successfully"
 
     - uses: actions/upload-artifact@v4
       with:
         name: NOAWatchdog-${{ env.VERSION }}
-        path: |
-          bin/x86/Release/NOAWatchdog.exe
-          NOAWatchdog-v${{ env.VERSION }}.zip
+        path: NOAWatchdog-v${{ env.VERSION }}.zip
