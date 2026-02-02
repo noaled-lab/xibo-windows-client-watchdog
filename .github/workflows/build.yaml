@@ -70,10 +70,20 @@ jobs:
         Write-Host "Copying files to package directory..."
         Copy-Item -Path "$releaseDir\*" -Destination $packageDir -Recurse -Force
 
-        # Rename the main executable
+        # Rename files to NOA branding
         if (Test-Path "$packageDir\XiboClientWatchdog.exe") {
           Rename-Item -Path "$packageDir\XiboClientWatchdog.exe" -NewName "NOAWatchdog.exe" -Force
           Write-Host "Renamed XiboClientWatchdog.exe to NOAWatchdog.exe"
+        }
+
+        if (Test-Path "$packageDir\XiboClientWatchdog.exe.config") {
+          Rename-Item -Path "$packageDir\XiboClientWatchdog.exe.config" -NewName "NOAWatchdog.exe.config" -Force
+          Write-Host "Renamed XiboClientWatchdog.exe.config to NOAWatchdog.exe.config"
+        }
+
+        if (Test-Path "$packageDir\XiboClientWatchdog.pdb") {
+          Rename-Item -Path "$packageDir\XiboClientWatchdog.pdb" -NewName "NOAWatchdog.pdb" -Force
+          Write-Host "Renamed XiboClientWatchdog.pdb to NOAWatchdog.pdb"
         }
 
         # List files in package
