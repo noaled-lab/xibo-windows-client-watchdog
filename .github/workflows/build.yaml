@@ -1,0 +1,89 @@
+name: Build and Upload
+on:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      BASE_VERSION: "1.0.0"
+      VERSION: "1.0.0.${{ github.run_number }}"
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Cache .NET Framework 4.0 Reference Assemblies
+      id: cache-net40
+      uses: actions/cache@v4
+      with:
+        path: ${{ runner.temp }}\net40ref
+        key: net40-ref-v1
+
+    - name: Install .NET Framework 4.0 Reference Assemblies
+      if: steps.cache-net40.outputs.cache-hit != 'true'
+      shell: powershell
+      run: |
+        $extractPath = "${{ runner.temp }}\net40ref"
+        Write-Host "Cache miss - downloading .NET Framework 4.0 Reference Assemblies..."
+        $url = "https://www.nuget.org/api/v2/package/Microsoft.NETFramework.ReferenceAssemblies.net40/1.0.3"
+        $nupkg = "$env:TEMP\net40ref.nupkg"
+        $zipFile = "$env:TEMP\net40ref.zip"
+
+        Invoke-WebRequest -Uri $url -OutFile $nupkg -UseBasicParsing
+        Rename-Item -Path $nupkg -NewName $zipFile
+        Expand-Archive -Path $zipFile -DestinationPath $extractPath -Force
+        Write-Host "Download and extraction completed"
+
+    - name: Copy Reference Assemblies to System Location
+      shell: powershell
+      run: |
+        $sourcePath = "${{ runner.temp }}\net40ref\build\.NETFramework\v4.0"
+        $targetPath = "C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.0"
+
+        if (Test-Path $sourcePath) {
+          Write-Host "Copying reference assemblies from cache/download..."
+          New-Item -ItemType Directory -Path $targetPath -Force
+          Copy-Item -Path "$sourcePath\*" -Destination $targetPath -Recurse -Force
+          Write-Host "Reference assemblies installed successfully"
+        } else {
+          Write-Error "Source path not found: $sourcePath"
+          exit 1
+        }
+
+    - uses: microsoft/setup-msbuild@v2
+
+    - name: Restore Packages
+      run: msbuild XiboClientWatchdog.sln /t:Restore /p:Configuration=Release /p:Platform="x86"
+
+    - name: Build Solution
+      run: msbuild XiboClientWatchdog.sln /p:Configuration=Release /p:Platform="x86"
+
+    - name: Rename Output to NOAWatchdog
+      shell: powershell
+      run: |
+        $sourcePath = "bin\x86\Release\XiboClientWatchdog.exe"
+        $targetPath = "bin\x86\Release\NOAWatchdog.exe"
+
+        if (Test-Path $sourcePath) {
+          Copy-Item -Path $sourcePath -Destination $targetPath -Force
+          Write-Host "Renamed output to NOAWatchdog.exe"
+        } else {
+          Write-Error "Build output not found: $sourcePath"
+          exit 1
+        }
+
+    - name: Create Release Archive
+      shell: powershell
+      run: |
+        $version = "$env:VERSION"
+        $archiveName = "NOAWatchdog-v$version.zip"
+        $releaseDir = "bin\x86\Release"
+
+        Write-Host "Creating release archive: $archiveName"
+        Compress-Archive -Path "$releaseDir\*" -DestinationPath $archiveName -Force
+        Write-Host "Archive created successfully"
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: NOAWatchdog-${{ env.VERSION }}
+        path: |
+          bin/x86/Release/NOAWatchdog.exe
+          NOAWatchdog-v${{ env.VERSION }}.zip
